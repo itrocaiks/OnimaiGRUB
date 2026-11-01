@@ -1,0 +1,7 @@
++ image {
+		top = 70%
+		left = 50%-400
+		width = 600
+		height = 240
+		file = "menu.png"
+}

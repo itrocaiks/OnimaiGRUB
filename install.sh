@@ -1,127 +1,198 @@
 #!/bin/bash
-ROOT_UID=0
-THEME_DIR="/usr/share/grub/themes"
-THEME_NAME=""
-MAX_DELAY=20
+# Oniichan wa Oshimai! GRUB Theme Installer
 
+set -o pipefail
 
-# Prompt colors
+# Constants
 
-CDEF=" \033[0m"                                     # default color
-CCIN=" \033[0;36m"                                  # info color
-CGSC=" \033[0;32m"                                  # success color
-CRER=" \033[0;31m"                                  # error color
-CWAR=" \033[0;33m"                                  # warning color
-b_CDEF=" \033[1;37m"                                # bold default color
-b_CCIN=" \033[1;36m"                                # bold info color
-b_CGSC=" \033[1;32m"                                # bold success color
-b_CRER=" \033[1;31m"                                # bold error color
-b_CWAR=" \033[1;33m"  
+readonly THEME_DIR="/usr/share/grub/themes/onimai"
+readonly GRUB_FILE="/etc/default/grub"
+readonly GRUB_BAK="${GRUB_FILE}.bak"
+# Regular
+readonly CDEF="\033[0m"       # Default
+readonly CCIN="\033[0;36m"    # Info (canyon)
+readonly CGSC="\033[0;32m"    # Success (green)
+readonly CRER="\033[0;31m"    # Error (red)
+readonly CWAR="\033[0;33m"    # Warning (yellow)
+# Bold
+readonly b_CDEF="\033[1;37m"
+readonly b_CCIN="\033[1;36m"
+readonly b_CGSC="\033[1;32m"
+readonly b_CRER="\033[1;31m"
+readonly b_CWAR="\033[1;33m"
 
+# Utility functions
 
-
-# Prompts is like echo command, but with colors for information, warnings etc.
 prompt () {
-  case ${1} in
-    "-s"|"--success")
-      echo -e "${b_CGSC}${@/-s/}${CDEF}";;          # for success message
-    "-e"|"--error")
-      echo -e "${b_CRER}${@/-e/}${CDEF}";;          # for error message
-    "-w"|"--warning")
-      echo -e "${b_CWAR}${@/-w/}${CDEF}";;          # for warning message
-    "-i"|"--info")
-      echo -e "${b_CCIN}${@/-i/}${CDEF}";;          # for info message
+  local color="$CDEF"
+  local opt="$1"
+
+  case "$opt" in
+    -s|--success)
+      color="$b_CGSC"
+      shift
+      ;;
+    -e|--error)
+      color="$b_CRER"
+      shift
+      ;;
+    -w|--warning)
+      color="$b_CWAR"
+      shift
+      ;;
+    -i|--info)
+      color="$b_CCIN"
+      shift
+      ;;
     *)
-    echo -e "$@"
-    ;;
+      color="$CDEF"
+      ;;
   esac
+
+  local message="$*"
+
+  printf "%b%b%b" "$color" "$message" "$CDEF"
 }
 
-# Welcome message
-  prompt -s " \n \t \t Oniichan wa Oshimai! GRUB theme \n \t \t \t by zenith-chan \n \n "   
-
-
-function has_command() {
-  command -v $1 > /dev/null
+has_command() {
+  command -v "$1" >/dev/null 2>&1
 }
 
-prompt -i "Would you like to have option menu under the boot menu?${CDEF}  (y/n): ${b_CWAR}${CDEF}"
-read answer0
+die() {
+  prompt -e "Error: $*\n"
+  exit 1
+}
 
-if [ "$answer0" = "y" ];then
-  THEME_NAME="Onimai"
-else
-  THEME_NAME="Onimai_no_menu"
-fi
-
-prompt -i "Begin installation?${CDEF}  (y/n): ${b_CWAR}${CDEF}"
-read answer
-if [ "$answer" = "y" ];then
-#checking for root access
-prompt -w "\nChecking for root access..."
-if [ "$UID" -eq "$ROOT_UID" ]; then
-  # Create grub themes directory if not exists
-  prompt -i "Checking for the existence of themes directory..."
-  [[ -d ${THEME_DIR}/${THEME_NAME} ]] && rm -rf ${THEME_DIR}/${THEME_NAME}
-  mkdir -p "${THEME_DIR}/${THEME_NAME}" 
-
-
-
-  # Copying theme
-  prompt -i "Installing ${THEME_NAME} theme..."
-  cp -a ${THEME_NAME}/* ${THEME_DIR}/${THEME_NAME}
-  
-  
-  
-  
-  
-  # Setting Onimai theme
-  prompt -i "Setting ${THEME_NAME} as default...\n"
-  
-  # Backup grub conf
-  cp -an /etc/default/grub /etc/default/grub.bak
-  
-  grep "GRUB_THEME=" /etc/default/grub 2>&1 >/dev/null && sed -i '/GRUB_THEME=/d' /etc/default/grub
-
-  echo "GRUB_THEME=\"${THEME_DIR}/${THEME_NAME}/theme.txt\"" >> /etc/default/grub
-
-
-
-
-  
-
-
-  prompt -i "\nUpdating GRUB config ...\n"
-  # Update grub config
-  echo -e "Updating grub config..."
-  if has_command update-grub; then
-    update-grub
-  elif has_command grub-mkconfig; then
-    grub-mkconfig -o /boot/grub/grub.cfg
-  elif has_command grub2-mkconfig; then
-    if has_command zypper; then
-      grub2-mkconfig -o /boot/grub2/grub.cfg
-    elif has_command dnf; then
-      grub2-mkconfig -o /boot/efi/EFI/fedora/grub.cfg
+# Detect location of grub.cfg (common paths)
+get_grub_cfg_path() {
+  local paths=(
+    "/boot/grub/grub.cfg"
+    "/boot/grub2/grub.cfg"
+    "/boot/efi/EFI/fedora/grub.cfg"
+    "/boot/efi/EFI/ubuntu/grub.cfg"
+  )
+  for p in "${paths[@]}"; do
+    if [[ -f "$p" ]]; then
+      echo "$p"
+      return 0
     fi
-  fi
+  done
+  return 1
+}
 
-  # End of installation (onii-chan's too tho)
-  prompt -s "\n \t \t Oniichan wa Oshimai Theme Installed! \n \t \t \t enjoy, onii-chan"
+# Main
 
-  
-
-else
-
-  # Error (need root)
-  prompt -e "\n [ Error! ] -> Run as root  \n \n "
-
+# Check for root access
+if [[ $EUID -ne 0 ]]; then
+  die "Root permission required."
 fi
 
-else
-  prompt -i "Exitinig ... "
+# Welcome
+prompt -s "\n\t\tOniichan wa Oshimai! GRUB theme\n\t\t\tby zenith-chan\n\n"
+
+# Check whether we need an option menu
+while true; do
+  prompt -i "Would you like to have an option menu under the boot menu? [Y/N] "
+  read -r answer
+  case "$answer" in
+    [Yy]* )
+      option_menu=1
+      break
+      ;;
+    [Nn]* )
+      option_menu=0
+      break
+      ;;
+    * )
+      prompt -w "Sorry, response '$answer' not understood.\n"
+      ;;
+  esac
+done
+
+# Confirm the installation
+while true; do
+  prompt -i "Would you like to start the installation? [Y/N] "
+  read -r answer
+  case "$answer" in
+    [Yy]* )
+      break
+      ;;
+    [Nn]* )
+      prompt -i "Quitting.\n"
+      exit 0
+      ;;
+    * )
+      prompt -w "Sorry, response '$answer' not understood.\n"
+      ;;
+  esac
+done
+
+# Ensure a clean installation
+prompt -i "Checking destination directory...\n"
+if [[ -d "$THEME_DIR" ]]; then
+  prompt -w "Warning: Destination directory '$THEME_DIR' exists. Removing...\n"
+  rm -rf "$THEME_DIR" || die "Cannot remove destination directory: $THEME_DIR"
 fi
 
+mkdir -p "$THEME_DIR" || die "Cannot create destination directory: $THEME_DIR"
 
+# Copy
+prompt -i "Installing...\n"
+if [[ ! -d "./themes/onimai" ]]; then
+  die "Cannot find theme source directory './themes/onimai/'. Are you in the project repository root directory?"
+fi
+cp -a "./themes/onimai/"* "$THEME_DIR/" || die "Failed to copy theme source."
 
+# Append option menu configuration (if needed)
+if [ $option_menu -eq 1 ]; then
+  prompt -i "Adding an option menu to the theme...\n"
+  {
+    echo
+    cat "$THEME_DIR/option_menu.txt"
+  } >> "$THEME_DIR/theme.txt" || {
+    prompt -w "Failed to append option menu configuration. You may need to add it manually.\n"
+  }
+fi
 
+# Back up GRUB configuration
+if [[ ! -f "$GRUB_BAK" ]]; then
+  cp -an "$GRUB_FILE" "$GRUB_BAK" || {
+    prompt -w "Warning: Failed to back up GRUB configuration '$GRUB_FILE'.\n"
+  }
+fi
+
+# Set GRUB theme
+new_theme_line="GRUB_THEME=\"${THEME_DIR}/theme.txt\""
+if grep -q "^GRUB_THEME=" "$GRUB_FILE" 2>/dev/null; then
+  sed -i "s|^GRUB_THEME=.*|$new_theme_line|" "$GRUB_FILE" || die "Failed to edit '$GRUB_FILE'."
+else
+  {
+  echo "$new_theme_line"
+  } >> "$GRUB_FILE" || die "Failed to edit '$GRUB_FILE'."
+fi
+
+# Updating GRUB (unified path detection)
+prompt -i "Updating GRUB configuration...\n"
+
+update_cmd=""
+if has_command update-grub; then
+  update_cmd="update-grub"
+elif has_command grub-mkconfig; then
+  cfg_path=$(get_grub_cfg_path) || die "Could not locate grub.cfg. Please update it manually."
+  update_cmd="grub-mkconfig -o $cfg_path"
+elif has_command grub2-mkconfig; then
+  cfg_path=$(get_grub_cfg_path) || die "Could not locate grub.cfg. Please update it manually."
+  update_cmd="grub2-mkconfig -o $cfg_path"
+else
+  die "Unknown command to update grub.cfg. Please do it yourself."
+fi
+
+prompt -i "Executing: '$update_cmd'\n"
+if ! eval "$update_cmd"; then
+  die "Failed to update grub.cfg. Please do it yourself."
+fi
+
+# Finished
+prompt -s "\n\t\tOniichan wa Oshimai Theme Installed!\n\t\t\tenjoy, onii-chan\n"
+
+exit 0
